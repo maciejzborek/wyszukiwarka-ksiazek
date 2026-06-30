@@ -69,13 +69,13 @@ async def index():
     <p>Dane z OpenLibrary.org</p>
   </header>
   <div class="search-box">
-    <input id="q" type="text" placeholder="Wpisz tytuł książki..." onkeydown="if(event.key==='Enter')search()"/>
-    <button onclick="search()">Szukaj</button>
+    <input id="q" type="text" placeholder="Wpisz tytuł książki..." onkeydown="if(event.key==='Enter')searchBooks()"/>
+    <button onclick="searchBooks()">Szukaj</button>
   </div>
   <div id="status"></div>
   <div id="results"></div>
   <script>
-    async function search() {
+    async function searchBooks() {
       const q = document.getElementById('q').value.trim();
       if (!q) return;
       const status = document.getElementById('status');

@@ -60,16 +60,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
-      - name: Copy nginx config & compose file to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "nginx/nginx.conf,docker-compose.prod.yml"
-          target: /opt/book-search-api/
-          strip_components: 1   # puts nginx.conf directly in /opt/book-search-api/
-
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -83,17 +73,27 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: ECR_REGISTRY,ECR_IMAGE,APP_VERSION,AWS_REGION
           script: |
-            # Authenticate with ECR
+            # Pobierz najnowsze pliki konfiguracyjne z GitHub
+            GITHUB_RAW="https://raw.githubusercontent.com/maciejzborek/wyszukiwarka-ksiazek/main"
+            curl -fsSL "$GITHUB_RAW/docker-compose.prod.yml" -o /opt/book-search-api/docker-compose.prod.yml
+            curl -fsSL "$GITHUB_RAW/nginx/nginx.conf"        -o /opt/book-search-api/nginx.conf
+
+            # Zaktualizuj .env z nowym obrazem i wersją
+            cat > /opt/book-search-api/.env << EOF
+            ECR_IMAGE=$ECR_IMAGE
+            APP_VERSION=$APP_VERSION
+            AWS_REGION=$AWS_REGION
+            EOF
+
+            # Zaloguj do ECR i zrestartuj serwis
             aws ecr get-login-password --region $AWS_REGION | \
               docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            # Pull new app image
-            docker pull $ECR_IMAGE
+            sudo systemctl restart book-search-api
 
-            # Restart stack with new image
-            cd /opt/book-search-api
-            ECR_IMAGE=$ECR_IMAGE APP_VERSION=$APP_VERSION \
-              docker compose -f docker-compose.prod.yml up -d --pull never
+            # Poczekaj chwilę i sprawdź status
+            sleep 5
+            sudo systemctl is-active book-search-api
 
-            # Clean up dangling images
+            # Wyczyść stare obrazy
             docker image prune -f
