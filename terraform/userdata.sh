@@ -21,9 +21,14 @@ chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 # Install AWS CLI (pre-installed on AL2023, this ensures it's current)
 yum install -y aws-cli
 
-# Create app directory (CI/CD will copy nginx.conf and compose file here)
+# Create app directory and pull config files from GitHub
 mkdir -p /opt/book-search-api
 chown ec2-user:ec2-user /opt/book-search-api
+
+GITHUB_RAW="https://raw.githubusercontent.com/maciejzborek/wyszukiwarka-ksiazek/main"
+curl -fsSL "$GITHUB_RAW/docker-compose.prod.yml" -o /opt/book-search-api/docker-compose.prod.yml
+curl -fsSL "$GITHUB_RAW/nginx/nginx.conf"        -o /opt/book-search-api/nginx.conf
+chown ec2-user:ec2-user /opt/book-search-api/*
 
 # Install CloudWatch agent for log collection
 yum install -y amazon-cloudwatch-agent
