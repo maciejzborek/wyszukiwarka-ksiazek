@@ -85,27 +85,55 @@ async def index():
       try {
         const res = await fetch('/search?title=' + encodeURIComponent(q) + '&limit=20');
         const data = await res.json();
-        if (!res.ok) { status.textContent = 'Błąd: ' + (data.detail || res.status); return; }
-        status.textContent = 'Znaleziono: ' + data.total_found + ' wyników (pokazuję ' + data.results.length + ')';
-        data.results.forEach(book => {
+        if (!res.ok) { status.textContent = 'Blad: ' + (data.detail || res.status); return; }
+        status.textContent = 'Znaleziono: ' + data.total_found + ' wynikow (pokazuje ' + data.results.length + ')';
+        data.results.forEach(function(book) {
           const isbn = book.isbn && book.isbn[0];
-          const coverUrl = isbn ? 'http://covers.openlibrary.org/b/isbn/' + isbn + '-M.jpg' : null;
-          const authors = book.authors && book.authors.length ? book.authors.join(', ') : 'Nieznany autor';
+          const authors = (book.authors && book.authors.length) ? book.authors.join(', ') : 'Nieznany autor';
+
           const card = document.createElement('div');
           card.className = 'card';
-          card.innerHTML = coverUrl
-            ? '<img src="' + coverUrl + '" alt="okładka" onerror="this.outerHTML=\'<div class=no-cover>📖</div>\'">'
-            : '<div class="no-cover">📖</div>';
-          card.innerHTML += '<div class="card-body"><h3>' + escHtml(book.title) + '</h3>'
-            + '<p>' + escHtml(authors) + '</p>'
-            + (book.first_publish_year ? '<p class="year">' + book.first_publish_year + '</p>' : '')
-            + '</div>';
+
+          if (isbn) {
+            const img = document.createElement('img');
+            img.alt = 'okladka';
+            img.src = 'http://covers.openlibrary.org/b/isbn/' + isbn + '-M.jpg';
+            img.onerror = function() {
+              const d = document.createElement('div');
+              d.className = 'no-cover';
+              d.textContent = String.fromCodePoint(0x1F4D6);
+              img.parentNode.replaceChild(d, img);
+            };
+            card.appendChild(img);
+          } else {
+            const d = document.createElement('div');
+            d.className = 'no-cover';
+            d.textContent = String.fromCodePoint(0x1F4D6);
+            card.appendChild(d);
+          }
+
+          const body = document.createElement('div');
+          body.className = 'card-body';
+
+          const h3 = document.createElement('h3');
+          h3.textContent = book.title;
+          body.appendChild(h3);
+
+          const p = document.createElement('p');
+          p.textContent = authors;
+          body.appendChild(p);
+
+          if (book.first_publish_year) {
+            const yr = document.createElement('p');
+            yr.className = 'year';
+            yr.textContent = book.first_publish_year;
+            body.appendChild(yr);
+          }
+
+          card.appendChild(body);
           results.appendChild(card);
         });
-      } catch(e) { status.textContent = 'Błąd połączenia.'; }
-    }
-    function escHtml(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      } catch(e) { status.textContent = 'Blad polaczenia: ' + e.message; }
     }
   </script>
 </body>
