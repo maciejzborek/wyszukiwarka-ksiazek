@@ -34,25 +34,21 @@ def test_search_returns_results():
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "totalItems": 2,
-        "items": [
+        "numFound": 2,
+        "docs": [
             {
-                "id": "OL123W",
-                "volumeInfo": {
-                    "title": "Clean Code",
-                    "authors": ["Robert C. Martin"],
-                    "publishedDate": "2008-08-01",
-                    "industryIdentifiers": [{"type": "ISBN_13", "identifier": "9780132350884"}],
-                },
+                "title": "Clean Code",
+                "author_name": ["Robert C. Martin"],
+                "first_publish_year": 2008,
+                "isbn": ["9780132350884"],
+                "key": "/works/OL123W",
             },
             {
-                "id": "OL456W",
-                "volumeInfo": {
-                    "title": "Clean Architecture",
-                    "authors": ["Robert C. Martin"],
-                    "publishedDate": "2017-09-20",
-                    "industryIdentifiers": [{"type": "ISBN_13", "identifier": "9780134494166"}],
-                },
+                "title": "Clean Architecture",
+                "author_name": ["Robert C. Martin"],
+                "first_publish_year": 2017,
+                "isbn": ["9780134494166"],
+                "key": "/works/OL456W",
             },
         ],
     }
@@ -78,7 +74,7 @@ def test_search_returns_results():
 def test_search_empty_results():
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {"totalItems": 0}
+    mock_response.json.return_value = {"numFound": 0, "docs": []}
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient") as mock_client:
