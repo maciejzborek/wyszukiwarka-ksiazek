@@ -1,0 +1,99 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: book-search-api
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r app/requirements-dev.txt
+
+      - name: Run tests
+        run: pytest app/test_main.py -v
+
+  build-and-deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker build -t $IMAGE -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $IMAGE
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Copy nginx config & compose file to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "nginx/nginx.conf,docker-compose.prod.yml"
+          target: /opt/book-search-api/
+          strip_components: 1   # puts nginx.conf directly in /opt/book-search-api/
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_IMAGE: ${{ steps.build.outputs.image }}
+          APP_VERSION: ${{ env.IMAGE_TAG }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: ECR_REGISTRY,ECR_IMAGE,APP_VERSION,AWS_REGION
+          script: |
+            # Authenticate with ECR
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            # Pull new app image
+            docker pull $ECR_IMAGE
+
+            # Restart stack with new image
+            cd /opt/book-search-api
+            ECR_IMAGE=$ECR_IMAGE APP_VERSION=$APP_VERSION \
+              docker compose -f docker-compose.prod.yml up -d --pull never
+
+            # Clean up dangling images
+            docker image prune -f
