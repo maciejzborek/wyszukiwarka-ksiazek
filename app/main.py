@@ -65,7 +65,7 @@ async def index():
 </head>
 <body>
   <header>
-    <h1>📚 Wyszukiwarka Książek</h1>
+    <h1>📚 Wyszukiwarka Książek zaliczenie</h1>
     <p>Dane z OpenLibrary.org</p>
   </header>
   <div class="search-box">
