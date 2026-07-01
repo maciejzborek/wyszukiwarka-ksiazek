@@ -1,7 +1,0 @@
-# Copy this file to terraform.tfvars and fill in your values
-# cp terraform.tfvars.example terraform.tfvars
-
-aws_region        = "eu-central-1"
-project_name      = "book-search-api"
-ec2_key_pair_name = "my-key-pair"     # Name of your existing EC2 key pair
-allowed_ssh_cidr  = "0.0.0.0/0"      # Restrict to your IP for security: "1.2.3.4/32"
