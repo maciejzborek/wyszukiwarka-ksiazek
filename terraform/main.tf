@@ -195,7 +195,7 @@ resource "aws_instance" "app" {
   )
 
   root_block_device {
-    volume_size = 20
+    volume_size = 30
     volume_type = "gp3"
   }
 
@@ -212,9 +212,10 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name      = "app"
-      image     = "${aws_ecr_repository.app.repository_url}:latest"
-      essential = true
+      name              = "app"
+      image             = "${aws_ecr_repository.app.repository_url}:latest"
+      essential         = true
+      memoryReservation = 256
       portMappings = [
         {
           containerPort = 8000
