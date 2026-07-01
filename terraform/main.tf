@@ -23,15 +23,11 @@ resource "aws_ecr_repository" "app" {
     scan_on_push = true
   }
 
-  tags = {
-    Project = var.project_name
-  }
+  tags = { Project = var.project_name }
 }
 
-# Keep only the 5 most recent images to save storage
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
-
   policy = jsonencode({
     rules = [{
       rulePriority = 1
@@ -47,7 +43,16 @@ resource "aws_ecr_lifecycle_policy" "app" {
 }
 
 # ──────────────────────────────────────────
-# IAM Role for EC2 (ECR pull + CloudWatch logs)
+# CloudWatch Log Group
+# ──────────────────────────────────────────
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/ecs/${var.project_name}"
+  retention_in_days = 7
+  tags              = { Project = var.project_name }
+}
+
+# ──────────────────────────────────────────
+# IAM – EC2 instance role (ECS agent + CloudWatch)
 # ──────────────────────────────────────────
 data "aws_iam_policy_document" "ec2_assume" {
   statement {
@@ -64,12 +69,12 @@ resource "aws_iam_role" "ec2_role" {
   assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
 }
 
-resource "aws_iam_role_policy_attachment" "ecr_readonly" {
+resource "aws_iam_role_policy_attachment" "ecs_ec2" {
   role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
-resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
+resource "aws_iam_role_policy_attachment" "cloudwatch" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
 }
@@ -79,8 +84,29 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_role.name
 }
 
+# IAM – ECS task execution role
+data "aws_iam_policy_document" "ecs_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_execution" {
+  name               = "${var.project_name}-ecs-execution-role"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
 # ──────────────────────────────────────────
-# Networking – use default VPC
+# Networking – default VPC
 # ──────────────────────────────────────────
 data "aws_vpc" "default" {
   default = true
@@ -124,22 +150,27 @@ resource "aws_security_group" "app" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name    = "${var.project_name}-sg"
-    Project = var.project_name
-  }
+  tags = { Name = "${var.project_name}-sg", Project = var.project_name }
 }
 
 # ──────────────────────────────────────────
-# EC2 Instance – Amazon Linux 2023, t3.micro
+# ECS Cluster
 # ──────────────────────────────────────────
-data "aws_ami" "amazon_linux_2023" {
+resource "aws_ecs_cluster" "app" {
+  name = var.project_name
+  tags = { Project = var.project_name }
+}
+
+# ──────────────────────────────────────────
+# EC2 – ECS-optimized AMI, t3.micro
+# ──────────────────────────────────────────
+data "aws_ami" "ecs_optimized" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["al2023-ami-ecs-hvm-*-x86_64"]
   }
 
   filter {
@@ -149,22 +180,72 @@ data "aws_ami" "amazon_linux_2023" {
 }
 
 resource "aws_instance" "app" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
-  instance_type          = "t3.micro"
-  key_name               = var.ec2_key_pair_name
-  subnet_id              = tolist(data.aws_subnets.default.ids)[0]
-  vpc_security_group_ids = [aws_security_group.app.id]
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  ami                         = data.aws_ami.ecs_optimized.id
+  instance_type               = "t3.micro"
+  key_name                    = var.ec2_key_pair_name
+  subnet_id                   = tolist(data.aws_subnets.default.ids)[0]
+  vpc_security_group_ids      = [aws_security_group.app.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+  associate_public_ip_address = true
 
-  user_data = file("${path.module}/userdata.sh")
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    echo ECS_CLUSTER=${var.project_name} >> /etc/ecs/ecs.config
+  EOF
+  )
 
   root_block_device {
     volume_size = 20
     volume_type = "gp3"
   }
 
-  tags = {
-    Name    = var.project_name
-    Project = var.project_name
-  }
+  tags = { Name = var.project_name, Project = var.project_name }
+}
+
+# ──────────────────────────────────────────
+# ECS Task Definition
+# ──────────────────────────────────────────
+resource "aws_ecs_task_definition" "app" {
+  family             = var.project_name
+  network_mode       = "bridge"
+  execution_role_arn = aws_iam_role.ecs_execution.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "app"
+      image     = "${aws_ecr_repository.app.repository_url}:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 8000
+          hostPort      = 80
+          protocol      = "tcp"
+        }
+      ]
+      environment = []
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/${var.project_name}"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+
+  tags = { Project = var.project_name }
+}
+
+# ──────────────────────────────────────────
+# ECS Service
+# ──────────────────────────────────────────
+resource "aws_ecs_service" "app" {
+  name            = "${var.project_name}-service"
+  cluster         = aws_ecs_cluster.app.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = 1
+  launch_type     = "EC2"
+
+  tags = { Project = var.project_name }
 }
