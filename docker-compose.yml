@@ -16,5 +16,5 @@ services:
     expose:
       - "8000"          # internal only – Nginx proxies here
     environment:
-      - APP_VERSION=1.0.0
+      - APP_VERSION=1.0.1
     restart: unless-stopped
