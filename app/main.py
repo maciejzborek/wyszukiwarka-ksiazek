@@ -65,8 +65,9 @@ async def index():
 </head>
 <body>
   <header>
-    <h1>📚 Wyszukiwarka Książek zaliczenie</h1>
+    <h1>📚 Wyszukiwarka Książek</h1>
     <p>Dane z OpenLibrary.org</p>
+    <p>projekt zaliczeniowy</p>
   </header>
   <div class="search-box">
     <input id="q" type="text" placeholder="Wpisz tytuł książki..." onkeydown="if(event.key==='Enter')searchBooks()"/>
