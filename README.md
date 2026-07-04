@@ -152,3 +152,4 @@ lub poprzez stronę http://<EC2_IP>
 ```
 
 ## Link do działającej aplikacji
+ec2-100-58-188-129.compute-1.amazonaws.com
