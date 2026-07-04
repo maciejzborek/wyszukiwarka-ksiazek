@@ -152,4 +152,4 @@ lub poprzez stronę http://<EC2_IP>
 ```
 
 ## Link do działającej aplikacji
-http://ec2-3-230-147-37.compute-1.amazonaws.com/
+http://ec2-44-204-219-1.compute-1.amazonaws.com/
