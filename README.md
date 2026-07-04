@@ -126,7 +126,7 @@ Przy pull requestach wykonywane są tylko testy (bez deployu).
 │   ├── variables.tf         # Zmienne
 │   ├── outputs.tf           # Outputy (IP, URL, ECR)
 │   ├── userdata.sh          # Skrypt startowy EC2 (Docker, Compose, CloudWatch)
-│   └── terraform.tfvars.example
+│   └── terraform.tfvars     # zmienne region aws, klucze, dostęp siec
 ├── .github/
 │   └── workflows/
 │       └── ci-cd.yml        # GitHub Actions pipeline
@@ -152,4 +152,3 @@ lub poprzez stronę http://<EC2_IP>
 ```
 
 ## Link do działającej aplikacji
-http://ec2-44-204-219-1.compute-1.amazonaws.com/
