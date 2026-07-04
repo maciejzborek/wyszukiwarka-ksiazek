@@ -75,7 +75,7 @@ jobs:
         run: |
           IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-          # Pobierz aktualną task definition i zaktualizuj obraz + wersję
+          # Pobierz aktualny task definition i zaktualizuj obraz + wersję
           TASK_DEF=$(aws ecs describe-task-definition \
             --task-definition $ECS_CLUSTER \
             --query taskDefinition --output json)
