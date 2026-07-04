@@ -69,11 +69,37 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Deploy to ECS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          VERSION: ${{ steps.build.outputs.version }}
         run: |
+          IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          # Pobierz aktualną task definition i zaktualizuj obraz + wersję
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition $ECS_CLUSTER \
+            --query taskDefinition --output json)
+
+          NEW_TASK_DEF=$(echo $TASK_DEF | jq \
+            --arg IMAGE "$IMAGE" \
+            --arg VERSION "$VERSION" \
+            '.containerDefinitions[0].image = $IMAGE |
+             .containerDefinitions[0].environment = [{"name":"APP_VERSION","value":$VERSION}]' | \
+            jq 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)')
+
+          # Zarejestruj nową rewizję task definition
+          NEW_TASK_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_TASK_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "New task definition: $NEW_TASK_ARN"
+
+          # Zaktualizuj serwis nową rewizją
           aws ecs update-service \
             --cluster $ECS_CLUSTER \
             --service $ECS_SERVICE \
-            --force-new-deployment \
+            --task-definition $NEW_TASK_ARN \
             --region $AWS_REGION
 
           echo "Waiting for service to stabilize..."
@@ -82,4 +108,4 @@ jobs:
             --services $ECS_SERVICE \
             --region $AWS_REGION
 
-          echo "Deployment complete!"
+          echo "Deployment complete! Version: $VERSION"
