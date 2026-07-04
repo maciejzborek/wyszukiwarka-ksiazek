@@ -1,6 +1,7 @@
 # Book Search API
 
 Prosta aplikacja REST API do wyszukiwania książek po tytule, korzystająca z [OpenLibrary.org](https://openlibrary.org).
+do pokazania budowani i wdrażania aplikacji na AWSie
 
 ## Opis projektu
 
@@ -12,7 +13,7 @@ API udostępnia trzy endpointy:
 ## Architektura v2
 
 ```
-GitHub → GitHub Actions → Amazon ECR → Amazon EC2 (t3.micro, Amazon Linux 2023)
+GitHub → GitHub Actions → Amazon ECR → Amazon ECS (t3.micro, Amazon Linux 2023)
                                               ↓
                                      Nginx (port 80)
                                               ↓
@@ -73,7 +74,6 @@ pytest app/test_main.py -v
 cd terraform
 
 # Skopiuj i uzupełnij zmienne
-cp terraform.tfvars.example terraform.tfvars
 # Edytuj terraform.tfvars – uzupełnij ec2_key_pair_name
 
 terraform init
@@ -81,9 +81,6 @@ terraform plan
 terraform apply
 ```
 
-Po zakończeniu Terraform wyświetli:
-- `app_url` – publiczny adres aplikacji
-- `ecr_repository_url` – adres repozytorium ECR
 
 ### 2. GitHub Secrets
 
@@ -93,7 +90,6 @@ W ustawieniach repozytorium GitHub dodaj następujące Secrets:
 |--------|------|
 | `AWS_ACCESS_KEY_ID` | AWS Access Key ID |
 | `AWS_SECRET_ACCESS_KEY` | AWS Secret Access Key |
-| `EC2_HOST` | Publiczny adres IP EC2 (z outputu Terraform) |
 | `EC2_SSH_KEY` | Zawartość pliku `.pem` klucza EC2 |
 
 ### 3. Pierwsze wdrożenie
@@ -152,8 +148,7 @@ curl http://<EC2_IP>/version
 # Wyszukiwanie książek
 curl "http://<EC2_IP>/search?title=Wiedźmin&limit=3"
 curl "http://<EC2_IP>/search?title=Clean+Code"
+lub poprzez stronę http://<EC2_IP>
 ```
 
 ## Link do działającej aplikacji
-
-> **TODO:** Po wdrożeniu uzupełnij tutaj publiczny adres URL.
