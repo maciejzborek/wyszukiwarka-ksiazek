@@ -1,13 +1,13 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-1"
 }
 
 variable "project_name" {
   description = "Project name used for resource naming"
   type        = string
-  default     = "book-search-api"
+  default     = "wyszukiwarka-ksiazek"
 }
 
 variable "ec2_key_pair_name" {
