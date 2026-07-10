@@ -10,7 +10,7 @@ API udostępnia trzy endpointy:
 - `GET /version` – zwraca wersję aplikacji
 - `GET /search?title=<tytuł>&limit=<n>` – wyszukuje książki w OpenLibrary.org
 
-## Architektura v2
+## Architektura v3
 
 ```
 GitHub → GitHub Actions → Amazon ECR → Amazon ECS (t3.micro, Amazon Linux 2023)
@@ -21,6 +21,11 @@ GitHub → GitHub Actions → Amazon ECR → Amazon ECS (t3.micro, Amazon Linux 
                                               ↓
                                      CloudWatch Logs
 ```
+Infrastruktura składa się z:
+- **Amazon ECR** – rejestr obrazów Docker
+- **Amazon ECS** – klaster i serwis zarządzający kontenerem aplikacji
+- **Amazon EC2** – instancja t3.micro z ECS-optimized AMI
+- **CloudWatch** – logi aplikacji w grupie `/ecs/wyszukiwarka-ksiazek`
 
 Na EC2 działają dwa kontenery Docker zarządzane przez docker-compose:
 - **nginx** – reverse proxy, przyjmuje ruch na porcie 80
@@ -77,9 +82,15 @@ cd terraform
 # Edytuj terraform.tfvars – uzupełnij ec2_key_pair_name
 
 terraform init
-terraform plan
-terraform apply
+terraform plan -var="ec2_key_pair_name=<nazwa_klucza>"
+terraform apply -var="ec2_key_pair_name=<nazwa_klucza>"
 ```
+
+Po zakończeniu Terraform wyświetli:
+- `app_url` – publiczny adres aplikacji
+- `ecr_repository_url` – adres repozytorium ECR
+- `ecs_cluster_name` – nazwa klastra ECS
+- `ecs_service_name` – nazwa serwisu ECS
 
 
 ### 2. GitHub Secrets
@@ -88,27 +99,29 @@ W ustawieniach repozytorium GitHub dodaj następujące Secrets:
 
 | Secret | Opis |
 |--------|------|
-| `AWS_ACCESS_KEY_ID` | AWS Access Key ID |
-| `AWS_SECRET_ACCESS_KEY` | AWS Secret Access Key |
-| `EC2_SSH_KEY` | Zawartość pliku `.pem` klucza EC2 |
+| `AWS_ACCESS_KEY_ID` | AWS Access Key ID użytkownika IAM |
+| `AWS_SECRET_ACCESS_KEY` | AWS Secret Access Key użytkownika IAM |
+| `EC2_KEY_PAIR_NAME` | Nazwa klucza EC2 w AWS (np. `book-search-key`) |
 
 ### 3. Pierwsze wdrożenie
 
-Po skonfigurowaniu secrets wykonaj push do brancha `main` – pipeline CI/CD automatycznie:
-1. Uruchomi testy
-2. Zbuduje obraz Docker
-3. Wgra obraz do ECR
-4. Zaloguje się na EC2 przez SSH i uruchomi nowy kontener
+1. Zastosuje konfigurację Terraform (infrastruktura)
+2. Uruchomi testy jednostkowe
+3. Zbuduje obraz Docker z numerem wersji
+4. Wgra obraz do ECR
+5. Po ręcznej akceptacji środowiska `production` – wdrożenie na ECS
 
 ## CI/CD Pipeline
 
 Pipeline (`.github/workflows/ci-cd.yml`) uruchamia się przy każdym push do `main`:
 
 ```
-push → test → build Docker image → push to ECR → deploy to EC2
+terraform → test → build & push → (akceptacja) → deploy to ECS
 ```
 
 Przy pull requestach wykonywane są tylko testy (bez deployu).
+
+Wersja aplikacji jest automatycznie generowana jako `1.0.<numer_runu>` i wbudowywana w obraz Docker.
 
 ## Struktura projektu
 

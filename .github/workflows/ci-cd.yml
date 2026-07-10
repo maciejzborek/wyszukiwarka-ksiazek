@@ -14,6 +14,47 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
+  terraform:
+    name: Terraform Deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init  
+        
+        # Sprawdzenie formatowania kodu
+      - name: Terraform Format Check
+        run: terraform fmt -check
+        
+        #Walidacja poprawności składniowej konfiguracji
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -var="ec2_key_pair_name=${{ secrets.EC2_KEY_PAIR_NAME }}"
+
+      - name: Terraform Apply
+        if: github.event_name == 'push' #tylko dla push
+        run: terraform apply -auto-approve -var="ec2_key_pair_name=${{ secrets.EC2_KEY_PAIR_NAME }}" #klucz na AWS  wartosc ="book-search-key" - dopisać do secret
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -31,12 +72,14 @@ jobs:
       - name: Run tests
         run: pytest app/test_main.py -v
 
-  build-and-deploy:
-    name: Build, Push & Deploy
+  build-and-push:
+    name: Build & Push
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, terraform]
     if: github.ref == 'refs/heads/main'
-    environment: production
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+      version: ${{ steps.build.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,14 +111,27 @@ jobs:
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Deploy to ECS
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          VERSION: ${{ steps.build.outputs.version }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+          VERSION: ${{ needs.build-and-push.outputs.version }}
         run: |
-          IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-          # Pobierz aktualny task definition i zaktualizuj obraz + wersję
+          # Pobierz aktualną task definition i zaktualizuj obraz + wersję
           TASK_DEF=$(aws ecs describe-task-definition \
             --task-definition $ECS_CLUSTER \
             --query taskDefinition --output json)
