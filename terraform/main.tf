@@ -8,7 +8,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "maciej.zborek"
+    bucket = "book-search-api-tfstate-maciej.zborek"
     key    = "terraform.tfstate"
     region = "us-east-1"
   }
