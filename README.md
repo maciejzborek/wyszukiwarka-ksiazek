@@ -10,7 +10,7 @@ API udostępnia trzy endpointy:
 - `GET /version` – zwraca wersję aplikacji
 - `GET /search?title=<tytuł>&limit=<n>` – wyszukuje książki w OpenLibrary.org
 
-## Architektura v4
+## Architektura v4.1
 
 ```
 GitHub → GitHub Actions → Amazon ECR → Amazon ECS (t3.micro, Amazon Linux 2023)
