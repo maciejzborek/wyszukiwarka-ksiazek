@@ -8,7 +8,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "book-search-api-tfstate-maciej.zborek"
+    bucket = "maciej.zborek"
     key    = "terraform.tfstate"
     region = "us-east-1"
   }
@@ -256,7 +256,11 @@ resource "aws_ecs_service" "app" {
   launch_type     = "EC2"
 
   deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 99
+  deployment_maximum_percent         = 100
+
+  lifecycle {
+    ignore_changes = [deployment_minimum_healthy_percent, deployment_maximum_percent, task_definition]
+  }
 
   tags = { Project = var.project_name }
 }
