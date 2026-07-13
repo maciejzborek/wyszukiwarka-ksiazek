@@ -165,4 +165,4 @@ lub poprzez stronę http://<EC2_IP>
 ```
 
 ## Link do działającej aplikacji
-nowy adres
+[nowy adres](http://ec2-44-213-134-125.compute-1.amazonaws.com/)
